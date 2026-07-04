@@ -60,6 +60,30 @@
     text-align:center;
   }
 
+  .modebar{
+    display:flex;
+    gap:8px;
+    width:100%;
+    max-width:420px;
+    margin-bottom:14px;
+  }
+  .mode-btn{
+    flex:1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--muted);
+    padding:9px 8px;
+    border-radius:9px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .mode-btn.active{
+    color:var(--text);
+    border-color:var(--a);
+    background:var(--a-dim);
+  }
+
   .scorebar{
     display:flex;
     gap:10px;
@@ -267,13 +291,18 @@
   <h1><span class="hash">#</span>TikTakFoe</h1>
   <div class="sub">Wachsendes Feld · Schieben · Pass&nbsp;&amp;&nbsp;Play</div>
 
+  <div class="modebar">
+    <button class="mode-btn active" id="modePvp">Pass &amp; Play</button>
+    <button class="mode-btn" id="modeVsBot">Gegen Bot</button>
+  </div>
+
   <div class="scorebar">
     <div class="score a" id="scoreA">
-      <span class="label">SPIELER A ✕</span>
+      <span class="label" id="labelA">SPIELER A ✕</span>
       <span class="wins">Siege: <b id="winsA">0</b></span>
     </div>
     <div class="score b" id="scoreB">
-      <span class="label">SPIELER B ◯</span>
+      <span class="label" id="labelB">SPIELER B ◯</span>
       <span class="wins">Siege: <b id="winsB">0</b></span>
     </div>
   </div>
@@ -324,6 +353,9 @@
 
     <h3>Sonstiges</h3>
     <p>Der Rahmen ums Spielbrett zeigt, wer gerade dran ist. Der Spielstand (Siege) lebt nur in dieser Sitzung, es gibt keinen Browser-Storage im Vorschaufenster.</p>
+
+    <h3>Gegen Bot</h3>
+    <p>Im Modus "Gegen Bot" übernimmt der Bot automatisch Spieler B, inklusive Blockphase. Er spielt nach einer Heuristik (Mitte bevorzugen, eigene Reihen ausbauen, gegnerische Reihen blocken), mit bewusst eingebauter Fehlerquote, damit er schlagbar bleibt. Kein perfekter Gegner, eher ein Sparringspartner.</p>
   </div>
 
 <script>
@@ -348,6 +380,7 @@
   let mode = 'place';
   let selected = null; // {r,c}
   let wins = { A:0, B:0 };
+  let vsBot = false; // Spieler B wird vom Bot gesteuert
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
@@ -361,6 +394,10 @@
     move: document.getElementById('modeMove'),
   };
   const modeBlockBtn = document.getElementById('modeBlock');
+  const modePvpBtn = document.getElementById('modePvp');
+  const modeVsBotBtn = document.getElementById('modeVsBot');
+  const labelAEl = document.getElementById('labelA');
+  const labelBEl = document.getElementById('labelB');
 
   function makeGrid(n){
     return Array.from({length:n}, () => Array(n).fill(null));
@@ -372,6 +409,7 @@
 
   function setMode(m){
     if (winner || blockPhase) return;
+    if (vsBot && current === 'B') return;
     mode = m;
     selected = null;
     Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k===m));
@@ -381,9 +419,14 @@
 
   Object.entries(modeBtns).forEach(([k,btn]) => btn.addEventListener('click', () => setMode(k)));
 
+  function playerLabel(p){
+    if (vsBot && p === 'B') return 'Bot';
+    return `Spieler ${p}`;
+  }
+
   function updateStatus(msg, isErr){
     if (winner){
-      statusEl.textContent = `Spieler ${winner} gewinnt! 🎉  Feld: ${size}×${size}`;
+      statusEl.textContent = `${playerLabel(winner)} gewinnt! 🎉  Feld: ${size}×${size}`;
       statusEl.classList.remove('err');
       return;
     }
@@ -393,20 +436,26 @@
       return;
     }
     statusEl.classList.remove('err');
+    if (vsBot && current === 'B'){
+      statusEl.textContent = blockPhase
+        ? 'Bot wählt ein Feld zum Blockieren...'
+        : 'Bot überlegt...';
+      return;
+    }
     if (blockPhase){
-      statusEl.textContent = `Spieler ${current} wählt ein Feld zum Blockieren (noch ${blockPhase.picksLeft}).`;
+      statusEl.textContent = `${playerLabel(current)} wählt ein Feld zum Blockieren (noch ${blockPhase.picksLeft}).`;
       return;
     }
     if (mode === 'place'){
-      statusEl.textContent = `Spieler ${current} ist am Zug — Feld setzen.`;
+      statusEl.textContent = `${playerLabel(current)} ist am Zug — Feld setzen.`;
     } else if (mode === 'push'){
       statusEl.textContent = selected
         ? `Richtung wählen: Nachbarfeld anklicken, in die die Figur geschoben wird.`
-        : `Spieler ${current}: gegnerische Figur mit eigener Nachbarfigur anklicken.`;
+        : `${playerLabel(current)}: gegnerische Figur mit eigener Nachbarfigur anklicken.`;
     } else if (mode === 'move'){
       statusEl.textContent = selected
         ? `Zielfeld wählen: freies Nachbarfeld anklicken.`
-        : `Spieler ${current}: eigene Figur zum Bewegen anklicken.`;
+        : `${playerLabel(current)}: eigene Figur zum Bewegen anklicken.`;
     }
   }
 
@@ -436,9 +485,9 @@
           div.classList.add('selected');
         }
 
-        if (!winner && blockPhase){
+        if (!winner && blockPhase && !(vsBot && current === 'B')){
           if (!isBlocked(val)) div.classList.add('blockable');
-        } else if (!winner){
+        } else if (!winner && !blockPhase && !(vsBot && current === 'B')){
           if (mode === 'place' && !val){
             div.classList.add('empty');
           } else if (mode === 'push'){
@@ -464,9 +513,16 @@
       }
     }
 
-    Object.values(modeBtns).forEach(btn => btn.style.display = blockPhase ? 'none' : '');
+    const botTurn = vsBot && current === 'B' && !winner;
+    Object.values(modeBtns).forEach(btn => {
+      btn.style.display = blockPhase ? 'none' : '';
+      btn.disabled = botTurn;
+    });
     modeBlockBtn.style.display = blockPhase ? '' : 'none';
     modeBlockBtn.classList.toggle('active', !!blockPhase);
+    modeBlockBtn.disabled = botTurn;
+    labelAEl.textContent = 'SPIELER A ✕';
+    labelBEl.textContent = vsBot ? 'BOT ◯' : 'SPIELER B ◯';
     const activeColor = winner || current;
     boardEl.classList.toggle('turn-a', activeColor === 'A');
     boardEl.classList.toggle('turn-b', activeColor === 'B');
@@ -481,16 +537,188 @@
     return Math.abs(dr) <= 1 && Math.abs(dc) <= 1 && !(dr===0 && dc===0);
   }
 
-  function hasAdjacentOwn(r,c,player){
+  function hasAdjacentOwnOnBoard(boardCells, sz, r, c, player){
     for (const [dr,dc] of DIRS){
       const nr = r+dr, nc = c+dc;
-      if (inBounds(nr,nc) && cells[nr][nc] === player) return true;
+      if (nr>=0 && nr<sz && nc>=0 && nc<sz && boardCells[nr][nc] === player) return true;
     }
     return false;
+  }
+  function hasAdjacentOwn(r,c,player){
+    return hasAdjacentOwnOnBoard(cells, size, r, c, player);
   }
 
   function isBlocked(val){ return typeof val === 'string' && val.startsWith(BLOCK_PREFIX); }
   function blockerOf(val){ return val.slice(BLOCK_PREFIX.length); } // 'A' oder 'B'
+
+  // ---------- Bot ----------
+  // Der Bot spielt immer Spieler B. Bewusst kein perfekter Minimax-Algorithmus,
+  // sondern eine Heuristik mit Zufallsanteil, damit er schlagbar bleibt.
+
+  function generateMoves(boardCells, sz, player){
+    const opp = opponent(player);
+    const moves = [];
+    for (let r=0; r<sz; r++){
+      for (let c=0; c<sz; c++){
+        const val = boardCells[r][c];
+        if (!val){
+          moves.push({type:'place', r, c});
+        } else if (val === opp && hasAdjacentOwnOnBoard(boardCells, sz, r, c, player)){
+          for (const [dr,dc] of DIRS){
+            if (tryPushOnBoard(boardCells, sz, r, c, dr, dc)){
+              moves.push({type:'push', r, c, dr, dc});
+            }
+          }
+        } else if (val === player){
+          for (const [dr,dc] of DIRS){
+            const nr = r+dr, nc = c+dc;
+            if (nr>=0 && nr<sz && nc>=0 && nc<sz && !boardCells[nr][nc]){
+              moves.push({type:'move', fr:r, fc:c, tr:nr, tc:nc});
+            }
+          }
+        }
+      }
+    }
+    return moves;
+  }
+
+  function applyMoveToBoard(boardCells, sz, move, player){
+    if (move.type === 'place'){
+      const nb = boardCells.map(row => row.slice());
+      nb[move.r][move.c] = player;
+      return nb;
+    }
+    if (move.type === 'move'){
+      const nb = boardCells.map(row => row.slice());
+      nb[move.tr][move.tc] = nb[move.fr][move.fc];
+      nb[move.fr][move.fc] = null;
+      return nb;
+    }
+    if (move.type === 'push'){
+      return tryPushOnBoard(boardCells, sz, move.r, move.c, move.dr, move.dc);
+    }
+    return boardCells;
+  }
+
+  // Grobe Heuristik: Mitte bevorzugen, eigene 2er-Reihen mit offenem Ende fördern,
+  // gegnerische 2er-Reihen mit offenem Ende bestrafen.
+  function scoreBoardFor(boardCells, sz, player){
+    const opp = opponent(player);
+    let score = 0;
+    const center = (sz-1) / 2;
+
+    for (let r=0; r<sz; r++){
+      for (let c=0; c<sz; c++){
+        const val = boardCells[r][c];
+        const dist = Math.abs(r-center) + Math.abs(c-center);
+        if (val === player) score += 3 - dist*0.3;
+        else if (val === opp) score -= 3 - dist*0.3;
+      }
+    }
+
+    const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+    for (let r=0; r<sz; r++){
+      for (let c=0; c<sz; c++){
+        for (const [dr,dc] of dirs){
+          const line = [[r,c],[r+dr,c+dc],[r+2*dr,c+2*dc]];
+          if (line.some(([lr,lc]) => lr<0||lr>=sz||lc<0||lc>=sz)) continue;
+          const vals = line.map(([lr,lc]) => boardCells[lr][lc]);
+          const countP = vals.filter(v => v === player).length;
+          const countO = vals.filter(v => v === opp).length;
+          const countEmpty = vals.filter(v => !v).length;
+          if (countP === 3) score += 2000;
+          if (countO === 3) score -= 2000;
+          if (countP === 2 && countEmpty === 1) score += 12;
+          if (countO === 2 && countEmpty === 1) score -= 14;
+        }
+      }
+    }
+    return score;
+  }
+
+  // Wählt einen Zug für den Bot. Nicht perfekt: mit BOT_DUMB_CHANCE greift er
+  // manchmal daneben, damit er schlagbar bleibt.
+  const BOT_DUMB_CHANCE = 0.22;
+
+  function botChooseMove(){
+    const player = 'B';
+    const moves = generateMoves(cells, size, player);
+    if (!moves.length) return null;
+
+    const scored = moves.map(m => {
+      const board = applyMoveToBoard(cells, size, m, player);
+      let s = board ? scoreBoardFor(board, size, player) : -Infinity;
+      return { m, s };
+    }).sort((a,b) => b.s - a.s);
+
+    if (scored.length > 1 && Math.random() < BOT_DUMB_CHANCE){
+      const poolSize = Math.min(4, scored.length);
+      const idx = 1 + Math.floor(Math.random() * (poolSize - 1));
+      return scored[idx].m;
+    }
+    return scored[0].m;
+  }
+
+  function botChooseBlockCell(){
+    const candidates = [];
+    for (let r=0; r<size; r++){
+      for (let c=0; c<size; c++){
+        if (!isBlocked(cells[r][c])) candidates.push({r,c});
+      }
+    }
+    if (!candidates.length) return null;
+
+    let best = null, bestScore = -Infinity;
+    const center = (size-1) / 2;
+    for (const cand of candidates){
+      let s = -(Math.abs(cand.r-center) + Math.abs(cand.c-center)) * 2;
+      if (cells[cand.r][cand.c] === 'A') s += 6; // entfernt eine gegnerische Figur
+      for (const [dr,dc] of DIRS){
+        const nr = cand.r+dr, nc = cand.c+dc;
+        if (inBounds(nr,nc)){
+          if (cells[nr][nc] === 'A') s += 4;
+          if (cells[nr][nc] === 'B') s -= 3; // eigene Figuren nicht einsperren
+        }
+      }
+      s += Math.random() * 3;
+      if (s > bestScore){ bestScore = s; best = cand; }
+    }
+    return best;
+  }
+
+  // Führt den gewählten Zug aus, indem die normalen Klick-Handler simuliert werden
+  // (gleicher Ablauf wie bei einem menschlichen Zug, inklusive finishMove()).
+  function botExecuteMove(m){
+    if (m.type === 'place'){
+      mode = 'place';
+      selected = null;
+      doPlace(m.r, m.c);
+    } else if (m.type === 'move'){
+      mode = 'move';
+      selected = null;
+      doMoveClick(m.fr, m.fc);
+      doMoveClick(m.tr, m.tc);
+    } else if (m.type === 'push'){
+      mode = 'push';
+      selected = null;
+      doPushClick(m.r, m.c);
+      doPushClick(m.r + m.dr, m.c + m.dc);
+    }
+  }
+
+  function maybeTriggerBot(){
+    if (!vsBot || winner || current !== 'B') return;
+    setTimeout(() => {
+      if (!vsBot || winner || current !== 'B') return; // falls sich zwischenzeitlich was geändert hat
+      if (blockPhase){
+        const cell = botChooseBlockCell();
+        if (cell) doBlockClick(cell.r, cell.c);
+      } else {
+        const move = botChooseMove();
+        if (move) botExecuteMove(move);
+      }
+    }, 550);
+  }
 
   // Lucide-Icons als Inline-SVG eingebettet, damit sie nicht von einem externen
   // CDN-Script abhängen (das in der Vorschau geblockt sein kann).
@@ -499,6 +727,7 @@
 
   function onCellClick(r,c){
     if (winner) return;
+    if (vsBot && current === 'B') return; // Bot ist dran, keine menschlichen Klicks
     if (blockPhase) return doBlockClick(r,c);
     if (mode === 'place') return doPlace(r,c);
     if (mode === 'push') return doPushClick(r,c);
@@ -511,16 +740,17 @@
     blockPhase.picksLeft--;
     if (blockPhase.picksLeft > 0){
       current = opponent(current);
-      updateStatus(`Feld blockiert. Spieler ${current} wählt jetzt ein Feld zum Blockieren.`);
+      updateStatus(`Feld blockiert. ${playerLabel(current)} wählt jetzt ein Feld zum Blockieren.`);
     } else {
       blockPhase = null;
       current = opponent(current);
       mode = 'place';
       selected = null;
       Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k==='place'));
-      updateStatus(`Beide Blockfelder gesetzt. Spieler ${current} ist am Zug.`);
+      updateStatus(`Beide Blockfelder gesetzt. ${playerLabel(current)} ist am Zug.`);
     }
     render();
+    maybeTriggerBot();
   }
 
   function doPlace(r,c){
@@ -583,42 +813,54 @@
     finishMove();
   }
 
-  // Push with chain reaction. Returns true if applied, false if invalid (no free cell along the line).
-  function executePush(r, c, dr, dc){
+  // Reine Variante: gibt bei Erfolg ein neues Board zurück, sonst null. Verändert boardCells nicht.
+  function tryPushOnBoard(boardCells, sz, r, c, dr, dc){
     const chain = [{r,c}];
     let nr = r + dr, nc = c + dc;
     while (true){
-      if (!inBounds(nr,nc)) return false; // hits the edge with no free cell -> invalid
-      if (isBlocked(cells[nr][nc])) return false; // Wand: Kette kann nicht hindurch
+      if (nr<0 || nr>=sz || nc<0 || nc>=sz) return null;
+      if (isBlocked(boardCells[nr][nc])) return null;
       chain.push({r:nr, c:nc});
-      if (!cells[nr][nc]) break; // found a free landing cell
+      if (!boardCells[nr][nc]) break;
       nr += dr; nc += dc;
     }
-    // shift every piece in the chain one step, starting from the far (free) end
+    const nb = boardCells.map(row => row.slice());
     for (let i = chain.length - 1; i > 0; i--){
       const dst = chain[i], src = chain[i-1];
-      cells[dst.r][dst.c] = cells[src.r][src.c];
+      nb[dst.r][dst.c] = nb[src.r][src.c];
     }
-    cells[r][c] = null;
+    nb[r][c] = null;
+    return nb;
+  }
+
+  // Push with chain reaction. Wendet das Ergebnis direkt auf das globale Board an.
+  function executePush(r, c, dr, dc){
+    const result = tryPushOnBoard(cells, size, r, c, dr, dc);
+    if (!result) return false;
+    cells = result;
     return true;
   }
 
-  function checkWin(){
+  function checkWinOnBoard(boardCells, sz){
     const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-    for (let r=0; r<size; r++){
-      for (let c=0; c<size; c++){
-        const val = cells[r][c];
-        if (!val) continue;
+    for (let r=0; r<sz; r++){
+      for (let c=0; c<sz; c++){
+        const val = boardCells[r][c];
+        if (val !== 'A' && val !== 'B') continue;
         for (const [dr,dc] of dirs){
           const r2=r+dr, c2=c+dc, r3=r+2*dr, c3=c+2*dc;
-          if (inBounds(r2,c2) && inBounds(r3,c3) &&
-              cells[r2][c2]===val && cells[r3][c3]===val){
+          if (r2>=0 && r2<sz && c2>=0 && c2<sz && r3>=0 && r3<sz && c3>=0 && c3<sz &&
+              boardCells[r2][c2]===val && boardCells[r3][c3]===val){
             return { winner: val, line: [[r,c],[r2,c2],[r3,c3]] };
           }
         }
       }
     }
     return null;
+  }
+
+  function checkWin(){
+    return checkWinOnBoard(cells, size);
   }
 
   function growBoard(){
@@ -661,13 +903,14 @@
 
     if (justGrew){
       blockPhase = { picksLeft: 2 };
-      updateStatus(`Feld gewachsen auf ${size}×${size}! Spieler ${current} wählt ein Feld zum Blockieren.`);
+      updateStatus(`Feld gewachsen auf ${size}×${size}! ${playerLabel(current)} wählt ein Feld zum Blockieren.`);
     } else {
       mode = 'place';
       Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k==='place'));
       updateStatus();
     }
     render();
+    maybeTriggerBot();
   }
 
   function newMatch(){
@@ -693,6 +936,21 @@
 
   document.getElementById('resetMatch').addEventListener('click', newMatch);
   document.getElementById('resetAll').addEventListener('click', resetAll);
+
+  modePvpBtn.addEventListener('click', () => {
+    if (!vsBot) return;
+    vsBot = false;
+    modePvpBtn.classList.add('active');
+    modeVsBotBtn.classList.remove('active');
+    newMatch();
+  });
+  modeVsBotBtn.addEventListener('click', () => {
+    if (vsBot) return;
+    vsBot = true;
+    modeVsBotBtn.classList.add('active');
+    modePvpBtn.classList.remove('active');
+    newMatch();
+  });
 
   const infoToggleBtn = document.getElementById('infoToggle');
   const infoPanelEl = document.getElementById('infoPanel');

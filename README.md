@@ -1,4 +1,4 @@
-# TicTacToe Deluxe
+# TicTacFoe
 
 **TikTakFoe** is an enhanced version of the classic Tic Tac Toe game with innovative gameplay mechanics that add strategic depth and excitement to the traditional puzzle.
 

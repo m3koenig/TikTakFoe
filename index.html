@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>TicTacToe Deluxe</title>
+<meta name="theme-color" content="#14181c">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%2314181c%22/><text x=%2250%22 y=%2268%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22%23E8A33D%22>#</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14181c;
+    --panel:#1c2127;
+    --panel-2:#20262d;
+    --line:#2c333b;
+    --text:#EDEFF2;
+    --muted:#7C8590;
+    --a:#E8A33D;   /* Spieler A */
+    --a-dim:#4a3a20;
+    --b:#4FB6A8;   /* Spieler B */
+    --b-dim:#1f3d38;
+    --warn:#E85D4A;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    min-height:100dvh;
+    padding:20px 16px 40px;
+    overflow-x:hidden;
+  }
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:clamp(22px,6vw,30px);
+    letter-spacing:-0.01em;
+    margin:4px 0 2px;
+  }
+  h1 .hash{color:var(--a);}
+  .sub{
+    color:var(--muted);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    margin-bottom:18px;
+    text-align:center;
+  }
+
+  .scorebar{
+    display:flex;
+    gap:10px;
+    width:100%;
+    max-width:420px;
+    margin-bottom:16px;
+  }
+  .score{
+    flex:1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .score.active{
+    box-shadow: inset 0 0 0 1px currentColor;
+  }
+  .score.a{color:var(--a);}
+  .score.b{color:var(--b);}
+  .score .label{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px;}
+  .score .wins{font-size:13px; color:var(--muted);}
+  .score .wins b{color:inherit;}
+
+  .board-wrap{
+    position:relative;
+    width:min(92vw, 420px);
+    aspect-ratio:1/1;
+    margin-bottom:18px;
+  }
+  .board{
+    position:relative;
+    width:100%;
+    height:100%;
+    display:grid;
+    gap:5px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:6px;
+    transition: gap .35s ease, box-shadow .25s ease;
+  }
+  .board.turn-a{ box-shadow: 0 0 0 3px var(--a); }
+  .board.turn-b{ box-shadow: 0 0 0 3px var(--b); }
+  .board.grown{
+    animation: growPulse .6s ease;
+  }
+  @keyframes growPulse{
+    0%{box-shadow:0 0 0 0 rgba(232,163,61,.5);}
+    100%{box-shadow:0 0 0 14px rgba(232,163,61,0);}
+  }
+  .cell{
+    position:relative;
+    background:var(--panel-2);
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    user-select:none;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    transition:background .15s, transform .1s;
+  }
+  .cell:active{ transform:scale(.94); }
+  .cell.empty:hover{ background:#262d35; }
+  .cell.piece-a{ color:var(--a); background:var(--a-dim); cursor:default; }
+  .cell.piece-b{ color:var(--b); background:var(--b-dim); cursor:default; }
+  .cell.piece-a.selectable, .cell.piece-b.selectable{ cursor:pointer; }
+  .cell.selected{
+    box-shadow: inset 0 0 0 2px var(--text);
+  }
+  .cell.target-hint{
+    background:#33261a;
+    box-shadow: inset 0 0 0 1px var(--a);
+  }
+  .cell .glyph{
+    font-size: 40%;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:100%;
+  }
+  .cell.win-flash{ animation: winFlash 1s ease infinite; }
+  .cell.blocked-cell{
+    background:#101318;
+    color:#3a4048;
+    cursor:not-allowed;
+  }
+  .cell.blocked-cell.blocked-a{ color:var(--a); }
+  .cell.blocked-cell.blocked-b{ color:var(--b); }
+  .cell .glyph svg{ display:block; width:55%; height:55%; stroke-width:2; }
+  .cell.blockable{ cursor:pointer; }
+  .cell.blockable:hover{ box-shadow: inset 0 0 0 2px var(--warn); }
+  @keyframes winFlash{
+    0%,100%{ filter:brightness(1); }
+    50%{ filter:brightness(1.5); }
+  }
+
+  .status{
+    min-height:20px;
+    font-size:13px;
+    color:var(--muted);
+    text-align:center;
+    margin-bottom:16px;
+    max-width:340px;
+  }
+  .status.err{ color:var(--warn); }
+
+  .actions{
+    display:flex;
+    gap:8px;
+    width:100%;
+    max-width:420px;
+    margin-bottom:10px;
+  }
+  .act-btn{
+    flex:1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:12px 8px;
+    border-radius:10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    text-align:center;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .act-btn .t{ display:block; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; margin-bottom:2px;}
+  .act-btn.active{ border-color:var(--a); background:var(--a-dim); }
+  .act-btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .act-btn.block-btn.active{ border-color:var(--warn); background:#3a2420; }
+
+  .footer{
+    display:flex;
+    gap:10px;
+    margin-top:6px;
+  }
+  .footer button{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--muted);
+    padding:9px 16px;
+    border-radius:8px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .footer button:hover{ color:var(--text); border-color:var(--muted); }
+
+  .note{
+    max-width:420px;
+    color:var(--muted);
+    font-size:11px;
+    line-height:1.6;
+    text-align:center;
+    margin-top:22px;
+    border-top:1px solid var(--line);
+    padding-top:14px;
+  }
+
+  #infoToggle.open{ color:var(--text); border-color:var(--a); }
+
+  .info-panel{
+    display:none;
+    width:100%;
+    max-width:420px;
+    margin-top:14px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px;
+  }
+  .info-panel.open{ display:block; }
+  .info-panel h3{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:13px;
+    color:var(--a);
+    margin:16px 0 4px;
+  }
+  .info-panel h3:first-child{ margin-top:0; }
+  .info-panel p{
+    font-size:12px;
+    line-height:1.6;
+    color:var(--text);
+    margin:0 0 4px;
+  }
+  .info-panel p.assumption{
+    color:var(--muted);
+    font-size:11px;
+    border-left:2px solid var(--a-dim);
+    padding-left:10px;
+    margin-top:6px;
+  }
+</style>
+</head>
+<body>
+
+  <h1><span class="hash">#</span>TicTacToe Deluxe</h1>
+  <div class="sub">Wachsendes Feld · Schieben · Pass&nbsp;&amp;&nbsp;Play</div>
+
+  <div class="scorebar">
+    <div class="score a" id="scoreA">
+      <span class="label">SPIELER A ✕</span>
+      <span class="wins">Siege: <b id="winsA">0</b></span>
+    </div>
+    <div class="score b" id="scoreB">
+      <span class="label">SPIELER B ◯</span>
+      <span class="wins">Siege: <b id="winsB">0</b></span>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="status" id="status">Spieler A ist am Zug — Feld setzen.</div>
+
+  <div class="actions">
+    <button class="act-btn active" id="modePlace" data-mode="place">
+      <span class="t">Setzen</span>eigene Figur
+    </button>
+    <button class="act-btn" id="modePush" data-mode="push">
+      <span class="t">Schieben</span>Gegner verdrängen
+    </button>
+    <button class="act-btn" id="modeMove" data-mode="move">
+      <span class="t">Bewegen</span>eigene Figur ziehen
+    </button>
+    <button class="act-btn block-btn" id="modeBlock" data-mode="block" style="display:none;">
+      <span class="t">Blockieren</span>Feld sperren
+    </button>
+  </div>
+
+  <div class="footer">
+    <button id="resetMatch">Neues Match</button>
+    <button id="resetAll">Alles zurücksetzen</button>
+    <button id="infoToggle">Regeln &amp; Infos</button>
+  </div>
+
+  <div class="info-panel" id="infoPanel">
+    <h3>Spielziel</h3>
+    <p>Drei eigene Figuren in einer Reihe (horizontal, vertikal oder diagonal) bringen, egal wie groß das Feld gerade ist.</p>
+
+    <h3>Setzen</h3>
+    <p>Standard-Zug: eine eigene Figur auf ein leeres Feld stellen.</p>
+
+    <h3>Schieben</h3>
+    <p>Statt zu setzen, kann man eine gegnerische Figur ein Feld weiterschieben, in alle 8 Richtungen. Das geht nur bei Figuren, an die mindestens eine eigene Figur angrenzt (auch diagonal). Steht im Zielfeld schon eine Figur, wird die auch mitgeschoben, immer weiter, bis eine Figur auf einem freien Feld landet. Läuft die Kette gegen den Rand ohne freies Feld, ist der Zug ungültig.</p>
+
+    <h3>Bewegen</h3>
+    <p>Eine eigene Figur um ein Feld auf ein freies Nachbarfeld ziehen, ohne Kettenreaktion.</p>
+    <p class="assumption">Design-Annahme: diese Aktion war im Original-Konzept als "eigene Fähigkeit" noch offen (Optionen waren u.a. Klonen, Schutz oder Blockieren). Bewegen wurde gewählt, weil es spiegelbildlich zum Schieben ist und sich am einfachsten balancieren lässt. Lässt sich im Code leicht gegen eine andere Variante tauschen.</p>
+
+    <h3>Wachstum &amp; Blockphase</h3>
+    <p>Nach ein paar Zügen wächst das Feld von 3×3 auf 5×5, bestehende Figuren bleiben stehen. Direkt danach blockiert jeder Spieler nacheinander ein selbst gewähltes Feld: Spieler A markiert seins mit einem Feuer-Icon, Spieler B mit einem Eis-Icon. Steht dort ein Stein, verschwindet er. Blockierte Felder sind dauerhaft raus aus dem Spiel: kein Setzen, Schieben oder Bewegen mehr möglich, und sie zählen nie zu einer Gewinnreihe.</p>
+
+    <h3>Sonstiges</h3>
+    <p>Der Rahmen ums Spielbrett zeigt, wer gerade dran ist. Der Spielstand (Siege) lebt nur in dieser Sitzung, es gibt keinen Browser-Storage im Vorschaufenster.</p>
+  </div>
+
+<script>
+(function(){
+  const DIRS = [
+    [-1,-1],[-1,0],[-1,1],
+    [ 0,-1],       [ 0,1],
+    [ 1,-1],[ 1,0],[ 1,1]
+  ];
+
+  const GROWTH_AFTER_MOVES = 4; // Feld wächst nach diesen Zügen insgesamt (vorher: 8 = 4 pro Spieler)
+  const BLOCK_PREFIX = 'BLOCK_'; // gespeicherter Wert ist 'BLOCK_A' oder 'BLOCK_B' je nachdem wer geblockt hat
+
+  let size = 3;
+  let cells = makeGrid(3); // 2D array, null | 'A' | 'B' | 'BLOCK_A' | 'BLOCK_B'
+  let current = 'A';
+  let totalMoves = 0;
+  let grown = false;
+  let blockPhase = null; // {picksLeft:n} — aktiv direkt nach dem Wachstum
+  let winner = null;
+  let winLine = [];
+  let mode = 'place';
+  let selected = null; // {r,c}
+  let wins = { A:0, B:0 };
+
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const scoreAEl = document.getElementById('scoreA');
+  const scoreBEl = document.getElementById('scoreB');
+  const winsAEl = document.getElementById('winsA');
+  const winsBEl = document.getElementById('winsB');
+  const modeBtns = {
+    place: document.getElementById('modePlace'),
+    push: document.getElementById('modePush'),
+    move: document.getElementById('modeMove'),
+  };
+  const modeBlockBtn = document.getElementById('modeBlock');
+
+  function makeGrid(n){
+    return Array.from({length:n}, () => Array(n).fill(null));
+  }
+
+  function inBounds(r,c){ return r>=0 && r<size && c>=0 && c<size; }
+
+  function opponent(p){ return p === 'A' ? 'B' : 'A'; }
+
+  function setMode(m){
+    if (winner || blockPhase) return;
+    mode = m;
+    selected = null;
+    Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k===m));
+    updateStatus();
+    render();
+  }
+
+  Object.entries(modeBtns).forEach(([k,btn]) => btn.addEventListener('click', () => setMode(k)));
+
+  function updateStatus(msg, isErr){
+    if (winner){
+      statusEl.textContent = `Spieler ${winner} gewinnt! 🎉  Feld: ${size}×${size}`;
+      statusEl.classList.remove('err');
+      return;
+    }
+    if (msg){
+      statusEl.textContent = msg;
+      statusEl.classList.toggle('err', !!isErr);
+      return;
+    }
+    statusEl.classList.remove('err');
+    if (blockPhase){
+      statusEl.textContent = `Spieler ${current} wählt ein Feld zum Blockieren (noch ${blockPhase.picksLeft}).`;
+      return;
+    }
+    if (mode === 'place'){
+      statusEl.textContent = `Spieler ${current} ist am Zug — Feld setzen.`;
+    } else if (mode === 'push'){
+      statusEl.textContent = selected
+        ? `Richtung wählen: Nachbarfeld anklicken, in die die Figur geschoben wird.`
+        : `Spieler ${current}: gegnerische Figur mit eigener Nachbarfigur anklicken.`;
+    } else if (mode === 'move'){
+      statusEl.textContent = selected
+        ? `Zielfeld wählen: freies Nachbarfeld anklicken.`
+        : `Spieler ${current}: eigene Figur zum Bewegen anklicken.`;
+    }
+  }
+
+  function render(){
+    boardEl.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    boardEl.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+    boardEl.innerHTML = '';
+
+    const winSet = new Set(winLine.map(([r,c]) => r+','+c));
+
+    for (let r=0; r<size; r++){
+      for (let c=0; c<size; c++){
+        const val = cells[r][c];
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.dataset.r = r;
+        div.dataset.c = c;
+
+        if (val === 'A') div.classList.add('piece-a');
+        else if (val === 'B') div.classList.add('piece-b');
+        else if (isBlocked(val)) div.classList.add('blocked-cell', blockerOf(val) === 'A' ? 'blocked-a' : 'blocked-b');
+        else div.classList.add('empty');
+
+        if (winSet.has(r+','+c)) div.classList.add('win-flash');
+
+        if (selected && selected.r === r && selected.c === c){
+          div.classList.add('selected');
+        }
+
+        if (!winner && blockPhase){
+          if (!isBlocked(val)) div.classList.add('blockable');
+        } else if (!winner){
+          if (mode === 'place' && !val){
+            div.classList.add('empty');
+          } else if (mode === 'push'){
+            if (!selected && val === opponent(current) && hasAdjacentOwn(r,c,current)) div.classList.add('selectable');
+            if (selected && isAdjacent(selected, {r,c}) && !isBlocked(val)) div.classList.add('target-hint');
+          } else if (mode === 'move'){
+            if (!selected && val === current) div.classList.add('selectable');
+            if (selected && !val && isAdjacent(selected, {r,c})) div.classList.add('target-hint');
+          }
+        }
+
+        const glyph = document.createElement('span');
+        glyph.className = 'glyph';
+        if (val === 'A') glyph.textContent = '✕';
+        else if (val === 'B') glyph.textContent = '◯';
+        else if (isBlocked(val)){
+          glyph.innerHTML = blockerOf(val) === 'A' ? FLAME_SVG : SNOWFLAKE_SVG;
+        }
+        div.appendChild(glyph);
+
+        div.addEventListener('click', () => onCellClick(r,c));
+        boardEl.appendChild(div);
+      }
+    }
+
+    Object.values(modeBtns).forEach(btn => btn.style.display = blockPhase ? 'none' : '');
+    modeBlockBtn.style.display = blockPhase ? '' : 'none';
+    modeBlockBtn.classList.toggle('active', !!blockPhase);
+    const activeColor = winner || current;
+    boardEl.classList.toggle('turn-a', activeColor === 'A');
+    boardEl.classList.toggle('turn-b', activeColor === 'B');
+    scoreAEl.classList.toggle('active', current === 'A' && !winner);
+    scoreBEl.classList.toggle('active', current === 'B' && !winner);
+    winsAEl.textContent = wins.A;
+    winsBEl.textContent = wins.B;
+  }
+
+  function isAdjacent(a,b){
+    const dr = b.r - a.r, dc = b.c - a.c;
+    return Math.abs(dr) <= 1 && Math.abs(dc) <= 1 && !(dr===0 && dc===0);
+  }
+
+  function hasAdjacentOwn(r,c,player){
+    for (const [dr,dc] of DIRS){
+      const nr = r+dr, nc = c+dc;
+      if (inBounds(nr,nc) && cells[nr][nc] === player) return true;
+    }
+    return false;
+  }
+
+  function isBlocked(val){ return typeof val === 'string' && val.startsWith(BLOCK_PREFIX); }
+  function blockerOf(val){ return val.slice(BLOCK_PREFIX.length); } // 'A' oder 'B'
+
+  // Lucide-Icons als Inline-SVG eingebettet, damit sie nicht von einem externen
+  // CDN-Script abhängen (das in der Vorschau geblockt sein kann).
+  const FLAME_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
+  const SNOWFLAKE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M12 2v20"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></svg>';
+
+  function onCellClick(r,c){
+    if (winner) return;
+    if (blockPhase) return doBlockClick(r,c);
+    if (mode === 'place') return doPlace(r,c);
+    if (mode === 'push') return doPushClick(r,c);
+    if (mode === 'move') return doMoveClick(r,c);
+  }
+
+  function doBlockClick(r,c){
+    if (isBlocked(cells[r][c])) return updateStatus('Dieses Feld ist schon blockiert.', true);
+    cells[r][c] = BLOCK_PREFIX + current; // entfernt auch einen eventuell dort stehenden Stein
+    blockPhase.picksLeft--;
+    if (blockPhase.picksLeft > 0){
+      current = opponent(current);
+      updateStatus(`Feld blockiert. Spieler ${current} wählt jetzt ein Feld zum Blockieren.`);
+    } else {
+      blockPhase = null;
+      current = opponent(current);
+      mode = 'place';
+      selected = null;
+      Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k==='place'));
+      updateStatus(`Beide Blockfelder gesetzt. Spieler ${current} ist am Zug.`);
+    }
+    render();
+  }
+
+  function doPlace(r,c){
+    if (isBlocked(cells[r][c])) return updateStatus('Dieses Feld ist blockiert.', true);
+    if (cells[r][c]) return updateStatus('Feld ist belegt.', true);
+    cells[r][c] = current;
+    finishMove();
+  }
+
+  function doPushClick(r,c){
+    const val = cells[r][c];
+    if (!selected){
+      if (val !== opponent(current)) return updateStatus('Bitte eine gegnerische Figur wählen.', true);
+      if (!hasAdjacentOwn(r,c,current)) return updateStatus('Nur Figuren schieben, an die eine eigene Figur angrenzt.', true);
+      selected = {r,c};
+      updateStatus();
+      render();
+      return;
+    }
+    if (selected.r === r && selected.c === c){
+      selected = null;
+      updateStatus();
+      render();
+      return;
+    }
+    if (!isAdjacent(selected, {r,c})) return updateStatus('Bitte ein direktes Nachbarfeld wählen.', true);
+
+    const dr = r - selected.r, dc = c - selected.c;
+    const ok = executePush(selected.r, selected.c, dr, dc);
+    if (!ok){
+      updateStatus('Zug ungültig: die Kette läuft ohne freies Feld gegen den Rand.', true);
+      return;
+    }
+    selected = null;
+    finishMove();
+  }
+
+  function doMoveClick(r,c){
+    const val = cells[r][c];
+    if (!selected){
+      if (val !== current) return updateStatus('Bitte eine eigene Figur wählen.', true);
+      selected = {r,c};
+      updateStatus();
+      render();
+      return;
+    }
+    if (selected.r === r && selected.c === c){
+      selected = null;
+      updateStatus();
+      render();
+      return;
+    }
+    if (!isAdjacent(selected, {r,c})) return updateStatus('Bitte ein direktes Nachbarfeld wählen.', true);
+    if (isBlocked(cells[r][c])) return updateStatus('Dieses Feld ist blockiert.', true);
+    if (cells[r][c]) return updateStatus('Zielfeld ist belegt.', true);
+
+    cells[r][c] = cells[selected.r][selected.c];
+    cells[selected.r][selected.c] = null;
+    selected = null;
+    finishMove();
+  }
+
+  // Push with chain reaction. Returns true if applied, false if invalid (no free cell along the line).
+  function executePush(r, c, dr, dc){
+    const chain = [{r,c}];
+    let nr = r + dr, nc = c + dc;
+    while (true){
+      if (!inBounds(nr,nc)) return false; // hits the edge with no free cell -> invalid
+      if (isBlocked(cells[nr][nc])) return false; // Wand: Kette kann nicht hindurch
+      chain.push({r:nr, c:nc});
+      if (!cells[nr][nc]) break; // found a free landing cell
+      nr += dr; nc += dc;
+    }
+    // shift every piece in the chain one step, starting from the far (free) end
+    for (let i = chain.length - 1; i > 0; i--){
+      const dst = chain[i], src = chain[i-1];
+      cells[dst.r][dst.c] = cells[src.r][src.c];
+    }
+    cells[r][c] = null;
+    return true;
+  }
+
+  function checkWin(){
+    const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+    for (let r=0; r<size; r++){
+      for (let c=0; c<size; c++){
+        const val = cells[r][c];
+        if (!val) continue;
+        for (const [dr,dc] of dirs){
+          const r2=r+dr, c2=c+dc, r3=r+2*dr, c3=c+2*dc;
+          if (inBounds(r2,c2) && inBounds(r3,c3) &&
+              cells[r2][c2]===val && cells[r3][c3]===val){
+            return { winner: val, line: [[r,c],[r2,c2],[r3,c3]] };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function growBoard(){
+    const oldSize = size;
+    const ns = size + 2;
+    const ng = makeGrid(ns);
+    for (let r=0; r<oldSize; r++){
+      for (let c=0; c<oldSize; c++){
+        ng[r+1][c+1] = cells[r][c];
+      }
+    }
+    size = ns;
+    cells = ng;
+    grown = true;
+  }
+
+  function finishMove(){
+    totalMoves++;
+
+    const result = checkWin();
+    if (result){
+      winner = result.winner;
+      winLine = result.line;
+      wins[winner]++;
+      render();
+      updateStatus();
+      return;
+    }
+
+    let justGrew = false;
+    if (!grown && totalMoves >= GROWTH_AFTER_MOVES && size === 3){
+      growBoard();
+      boardEl.classList.add('grown');
+      setTimeout(() => boardEl.classList.remove('grown'), 650);
+      justGrew = true;
+    }
+
+    current = opponent(current);
+    selected = null;
+
+    if (justGrew){
+      blockPhase = { picksLeft: 2 };
+      updateStatus(`Feld gewachsen auf ${size}×${size}! Spieler ${current} wählt ein Feld zum Blockieren.`);
+    } else {
+      mode = 'place';
+      Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k==='place'));
+      updateStatus();
+    }
+    render();
+  }
+
+  function newMatch(){
+    size = 3;
+    cells = makeGrid(3);
+    current = 'A';
+    totalMoves = 0;
+    grown = false;
+    blockPhase = null;
+    winner = null;
+    winLine = [];
+    mode = 'place';
+    selected = null;
+    Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k==='place'));
+    updateStatus();
+    render();
+  }
+
+  function resetAll(){
+    wins = { A:0, B:0 };
+    newMatch();
+  }
+
+  document.getElementById('resetMatch').addEventListener('click', newMatch);
+  document.getElementById('resetAll').addEventListener('click', resetAll);
+
+  const infoToggleBtn = document.getElementById('infoToggle');
+  const infoPanelEl = document.getElementById('infoPanel');
+  infoToggleBtn.addEventListener('click', () => {
+    const isOpen = infoPanelEl.classList.toggle('open');
+    infoToggleBtn.classList.toggle('open', isOpen);
+  });
+
+  render();
+  updateStatus();
+
+  // Minimal PWA install support (works once hosted over https, ignored otherwise)
+  if ('serviceWorker' in navigator){
+    const swCode = `
+      self.addEventListener('install', e => self.skipWaiting());
+      self.addEventListener('fetch', e => {});
+    `;
+    try {
+      const blob = new Blob([swCode], {type:'application/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+    } catch(e){}
+  }
+})();
+</script>
+</body>
+</html>

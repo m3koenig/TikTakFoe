@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -89,6 +90,7 @@
     gap:10px;
     width:100%;
     max-width:420px;
+    margin-top:14px;
     margin-bottom:16px;
   }
   .score{
@@ -223,22 +225,104 @@
   .act-btn:disabled{ opacity:.35; cursor:not-allowed; }
   .act-btn.block-btn.active{ border-color:var(--warn); background:#3a2420; }
 
-  .footer{
-    display:flex;
-    gap:10px;
-    margin-top:6px;
-  }
-  .footer button{
-    background:transparent;
+  .burger-btn{
+    position:fixed;
+    top:calc(14px + env(safe-area-inset-top));
+    right:calc(14px + env(safe-area-inset-right));
+    z-index:50;
+    width:42px;
+    height:42px;
+    background:var(--panel);
     border:1px solid var(--line);
-    color:var(--muted);
-    padding:9px 16px;
-    border-radius:8px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
+    color:var(--text);
+    border-radius:10px;
+    font-size:18px;
+    line-height:1;
     cursor:pointer;
   }
-  .footer button:hover{ color:var(--text); border-color:var(--muted); }
+  .burger-btn:hover{ border-color:var(--muted); }
+
+  .menu-backdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.55);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s ease;
+    z-index:40;
+  }
+  .menu-backdrop.open{ opacity:1; pointer-events:auto; }
+
+  .menu-drawer{
+    position:fixed;
+    top:0;
+    right:0;
+    height:100dvh;
+    width:min(86vw, 320px);
+    background:var(--panel);
+    border-left:1px solid var(--line);
+    transform:translateX(100%);
+    transition:transform .28s ease;
+    z-index:45;
+    overflow-y:auto;
+    padding:calc(20px + env(safe-area-inset-top)) 18px 24px;
+    box-sizing:border-box;
+  }
+  .menu-drawer.open{ transform:translateX(0); }
+
+  .menu-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:20px;
+  }
+  .menu-title{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:16px;
+  }
+  .menu-close{
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-size:20px;
+    line-height:1;
+    cursor:pointer;
+    padding:4px;
+  }
+  .menu-close:hover{ color:var(--text); }
+
+  .menu-section{
+    margin-bottom:20px;
+    padding-bottom:18px;
+    border-bottom:1px solid var(--line);
+  }
+  .menu-section:last-child{ border-bottom:none; margin-bottom:0; }
+
+  .menu-label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+
+  .menu-item-btn{
+    display:block;
+    width:100%;
+    text-align:left;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:11px 12px;
+    border-radius:8px;
+    margin-bottom:8px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    cursor:pointer;
+  }
+  .menu-item-btn:last-child{ margin-bottom:0; }
+  .menu-item-btn:hover{ border-color:var(--muted); }
 
   .note{
     max-width:420px;
@@ -288,13 +372,58 @@
 </head>
 <body>
 
-  <h1><span class="hash">#</span>TikTakFoe</h1>
-  <div class="sub">Wachsendes Feld · Schieben · Pass&nbsp;&amp;&nbsp;Play</div>
+  <button class="burger-btn" id="burgerBtn" aria-label="Menü">☰</button>
+  <div class="menu-backdrop" id="menuBackdrop"></div>
 
-  <div class="modebar">
-    <button class="mode-btn active" id="modePvp">Pass &amp; Play</button>
-    <button class="mode-btn" id="modeVsBot">Gegen Bot</button>
+  <div class="menu-drawer" id="menuDrawer">
+    <div class="menu-header">
+      <span class="menu-title">Menü</span>
+      <button class="menu-close" id="menuClose" aria-label="Menü schließen">✕</button>
+    </div>
+
+    <div class="menu-section">
+      <div class="menu-label">Spielmodus</div>
+      <div class="modebar">
+        <button class="mode-btn active" id="modePvp">Pass &amp; Play</button>
+        <button class="mode-btn" id="modeVsBot">Gegen Bot</button>
+      </div>
+    </div>
+
+    <div class="menu-section">
+      <button class="menu-item-btn" id="resetMatch">Neues Match</button>
+      <button class="menu-item-btn" id="resetAll">Alles zurücksetzen</button>
+    </div>
+
+    <div class="menu-section">
+      <button class="menu-item-btn" id="infoToggle">Regeln &amp; Infos</button>
+
+      <div class="info-panel" id="infoPanel">
+        <h3>Spielziel</h3>
+        <p>Drei eigene Figuren in einer Reihe (horizontal, vertikal oder diagonal) bringen, egal wie groß das Feld gerade ist.</p>
+
+        <h3>Setzen</h3>
+        <p>Standard-Zug: eine eigene Figur auf ein leeres Feld stellen.</p>
+
+        <h3>Schieben</h3>
+        <p>Statt zu setzen, kann man eine gegnerische Figur ein Feld weiterschieben, in alle 8 Richtungen. Das geht nur bei Figuren, an die mindestens eine eigene Figur angrenzt (auch diagonal). Steht im Zielfeld schon eine Figur, wird die auch mitgeschoben, immer weiter, bis eine Figur auf einem freien Feld landet. Läuft die Kette gegen den Rand ohne freies Feld, ist der Zug ungültig.</p>
+
+        <h3>Bewegen</h3>
+        <p>Eine eigene Figur um ein Feld auf ein freies Nachbarfeld ziehen, ohne Kettenreaktion.</p>
+        <p class="assumption">Design-Annahme: diese Aktion war im Original-Konzept als "eigene Fähigkeit" noch offen (Optionen waren u.a. Klonen, Schutz oder Blockieren). Bewegen wurde gewählt, weil es spiegelbildlich zum Schieben ist und sich am einfachsten balancieren lässt. Lässt sich im Code leicht gegen eine andere Variante tauschen.</p>
+
+        <h3>Wachstum &amp; Blockphase</h3>
+        <p>Nach ein paar Zügen wächst das Feld von 3×3 auf 5×5, bestehende Figuren bleiben stehen. Direkt danach blockiert jeder Spieler nacheinander ein selbst gewähltes Feld: Spieler A markiert seins mit einem Feuer-Icon, Spieler B mit einem Eis-Icon. Steht dort ein Stein, verschwindet er. Blockierte Felder sind dauerhaft raus aus dem Spiel: kein Setzen, Schieben oder Bewegen mehr möglich, und sie zählen nie zu einer Gewinnreihe.</p>
+
+        <h3>Sonstiges</h3>
+        <p>Der Rahmen ums Spielbrett zeigt, wer gerade dran ist. Der Spielstand (Siege) lebt nur in dieser Sitzung, es gibt keinen Browser-Storage im Vorschaufenster.</p>
+
+        <h3>Gegen Bot</h3>
+        <p>Im Modus "Gegen Bot" übernimmt der Bot automatisch Spieler B, inklusive Blockphase. Er spielt nach einer Heuristik (Mitte bevorzugen, eigene Reihen ausbauen, gegnerische Reihen blocken), mit bewusst eingebauter Fehlerquote, damit er schlagbar bleibt. Kein perfekter Gegner, eher ein Sparringspartner.</p>
+      </div>
+    </div>
   </div>
+
+  <h1><span class="hash">#</span>TikTakFoe</h1>
 
   <div class="scorebar">
     <div class="score a" id="scoreA">
@@ -326,36 +455,6 @@
     <button class="act-btn block-btn" id="modeBlock" data-mode="block" style="display:none;">
       <span class="t">Blockieren</span>Feld sperren
     </button>
-  </div>
-
-  <div class="footer">
-    <button id="resetMatch">Neues Match</button>
-    <button id="resetAll">Alles zurücksetzen</button>
-    <button id="infoToggle">Regeln &amp; Infos</button>
-  </div>
-
-  <div class="info-panel" id="infoPanel">
-    <h3>Spielziel</h3>
-    <p>Drei eigene Figuren in einer Reihe (horizontal, vertikal oder diagonal) bringen, egal wie groß das Feld gerade ist.</p>
-
-    <h3>Setzen</h3>
-    <p>Standard-Zug: eine eigene Figur auf ein leeres Feld stellen.</p>
-
-    <h3>Schieben</h3>
-    <p>Statt zu setzen, kann man eine gegnerische Figur ein Feld weiterschieben, in alle 8 Richtungen. Das geht nur bei Figuren, an die mindestens eine eigene Figur angrenzt (auch diagonal). Steht im Zielfeld schon eine Figur, wird die auch mitgeschoben, immer weiter, bis eine Figur auf einem freien Feld landet. Läuft die Kette gegen den Rand ohne freies Feld, ist der Zug ungültig.</p>
-
-    <h3>Bewegen</h3>
-    <p>Eine eigene Figur um ein Feld auf ein freies Nachbarfeld ziehen, ohne Kettenreaktion.</p>
-    <p class="assumption">Design-Annahme: diese Aktion war im Original-Konzept als "eigene Fähigkeit" noch offen (Optionen waren u.a. Klonen, Schutz oder Blockieren). Bewegen wurde gewählt, weil es spiegelbildlich zum Schieben ist und sich am einfachsten balancieren lässt. Lässt sich im Code leicht gegen eine andere Variante tauschen.</p>
-
-    <h3>Wachstum &amp; Blockphase</h3>
-    <p>Nach ein paar Zügen wächst das Feld von 3×3 auf 5×5, bestehende Figuren bleiben stehen. Direkt danach blockiert jeder Spieler nacheinander ein selbst gewähltes Feld: Spieler A markiert seins mit einem Feuer-Icon, Spieler B mit einem Eis-Icon. Steht dort ein Stein, verschwindet er. Blockierte Felder sind dauerhaft raus aus dem Spiel: kein Setzen, Schieben oder Bewegen mehr möglich, und sie zählen nie zu einer Gewinnreihe.</p>
-
-    <h3>Sonstiges</h3>
-    <p>Der Rahmen ums Spielbrett zeigt, wer gerade dran ist. Der Spielstand (Siege) lebt nur in dieser Sitzung, es gibt keinen Browser-Storage im Vorschaufenster.</p>
-
-    <h3>Gegen Bot</h3>
-    <p>Im Modus "Gegen Bot" übernimmt der Bot automatisch Spieler B, inklusive Blockphase. Er spielt nach einer Heuristik (Mitte bevorzugen, eigene Reihen ausbauen, gegnerische Reihen blocken), mit bewusst eingebauter Fehlerquote, damit er schlagbar bleibt. Kein perfekter Gegner, eher ein Sparringspartner.</p>
   </div>
 
 <script>
@@ -958,6 +1057,26 @@
     const isOpen = infoPanelEl.classList.toggle('open');
     infoToggleBtn.classList.toggle('open', isOpen);
   });
+
+  const burgerBtn = document.getElementById('burgerBtn');
+  const menuBackdrop = document.getElementById('menuBackdrop');
+  const menuDrawer = document.getElementById('menuDrawer');
+  const menuClose = document.getElementById('menuClose');
+
+  function openMenu(){
+    menuDrawer.classList.add('open');
+    menuBackdrop.classList.add('open');
+  }
+  function closeMenu(){
+    menuDrawer.classList.remove('open');
+    menuBackdrop.classList.remove('open');
+  }
+  function toggleMenu(){
+    menuDrawer.classList.contains('open') ? closeMenu() : openMenu();
+  }
+  burgerBtn.addEventListener('click', toggleMenu);
+  menuClose.addEventListener('click', closeMenu);
+  menuBackdrop.addEventListener('click', closeMenu);
 
   render();
   updateStatus();

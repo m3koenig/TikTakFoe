@@ -181,6 +181,7 @@
   }
   .cell.blocked-cell.blocked-a{ color:var(--a); }
   .cell.blocked-cell.blocked-b{ color:var(--b); }
+  .cell.blocked-cell.blocked-wall{ color:var(--muted); }
   .cell .glyph svg{ display:block; width:55%; height:55%; stroke-width:2; }
   .cell.blockable{ cursor:pointer; }
   .cell.blockable:hover{ box-shadow: inset 0 0 0 2px var(--warn); }
@@ -326,7 +327,7 @@
   .win-backdrop{
     position:fixed;
     inset:0;
-    background:rgba(0,0,0,.6);
+    background:rgba(0,0,0,.28);
     opacity:0;
     pointer-events:none;
     transition:opacity .25s ease;
@@ -340,7 +341,7 @@
     left:50%;
     transform:translate(-50%,-50%) scale(.92);
     width:min(85vw, 340px);
-    background:var(--panel);
+    background:rgba(28,33,39,0.82);
     border:1px solid var(--line);
     border-radius:16px;
     padding:32px 24px 24px;
@@ -465,13 +466,19 @@
         <p class="assumption">Design-Annahme: diese Aktion war im Original-Konzept als "eigene Fähigkeit" noch offen (Optionen waren u.a. Klonen, Schutz oder Blockieren). Bewegen wurde gewählt, weil es spiegelbildlich zum Schieben ist und sich am einfachsten balancieren lässt. Lässt sich im Code leicht gegen eine andere Variante tauschen.</p>
 
         <h3>Wachstum &amp; Blockphase</h3>
-        <p>Nach ein paar Zügen wächst das Feld von 3×3 auf 5×5, bestehende Figuren bleiben stehen. Direkt danach blockiert jeder Spieler nacheinander ein selbst gewähltes Feld: Spieler A markiert seins mit einem Feuer-Icon, Spieler B mit einem Eis-Icon. Steht dort ein Stein, verschwindet er. Blockierte Felder sind dauerhaft raus aus dem Spiel: kein Setzen, Schieben oder Bewegen mehr möglich, und sie zählen nie zu einer Gewinnreihe.</p>
+        <p>Sobald beide Spieler mindestens 2 eigene Figuren auf dem Feld haben, wächst das Feld von 3×3 auf 5×5, bestehende Figuren bleiben stehen. Schieben oder Bewegen zählt dabei nicht als "eigene Figur platziert", nur das Setzen zählt. Direkt nach dem Wachstum blockiert jeder Spieler nacheinander ein selbst gewähltes Feld: Spieler A markiert seins mit einem Feuer-Icon, Spieler B mit einem Eis-Icon. Steht dort ein Stein, verschwindet er. Blockierte Felder sind dauerhaft raus aus dem Spiel: kein Setzen, Schieben oder Bewegen mehr möglich, und sie zählen nie zu einer Gewinnreihe.</p>
 
         <h3>Sonstiges</h3>
         <p>Der Rahmen ums Spielbrett zeigt, wer gerade dran ist. Der Spielstand (Siege) lebt nur in dieser Sitzung, es gibt keinen Browser-Storage im Vorschaufenster.</p>
 
         <h3>Gegen Bot</h3>
         <p>Im Modus "Gegen Bot" übernimmt der Bot automatisch Spieler B, inklusive Blockphase. Er spielt nach einer Heuristik (Mitte bevorzugen, eigene Reihen ausbauen, gegnerische Reihen blocken), mit bewusst eingebauter Fehlerquote, damit er schlagbar bleibt. Kein perfekter Gegner, eher ein Sparringspartner.</p>
+
+        <h3>Startspieler wechselt</h3>
+        <p>Wer zuerst zieht, hat in diesem Spiel einen echten Vorteil, mit exakt optimalem Spiel lässt sich das kaum ausgleichen. Deshalb wechselt der Startspieler jedes neue Match automatisch (A, dann B, dann wieder A, ...), damit sich der Vorteil über mehrere Partien fair verteilt statt immer derselben Person zu gehören.</p>
+
+        <h3>Automatische Wand</h3>
+        <p>Stehen zwei eigene Figuren nebeneinander und sind beide Enden der Reihe frei, taucht sofort automatisch eine neutrale Wand an einem der beiden Enden auf (graues Symbol, gehört keinem Spieler). Eine "offene" Zweierreihe wäre sonst so gut wie nicht zu stoppen, das haben Testpartien gezeigt. Die Wand macht daraus eine normale, einseitige Bedrohung, die der Gegner ganz regulär blocken kann.</p>
       </div>
     </div>
   </div>
@@ -525,12 +532,13 @@
     [ 1,-1],[ 1,0],[ 1,1]
   ];
 
-  const GROWTH_AFTER_MOVES = 4; // Feld wächst nach diesen Zügen insgesamt (vorher: 8 = 4 pro Spieler)
+  const GROWTH_MIN_OWN_PIECES = 2; // Feld wächst, sobald beide Spieler mindestens so viele eigene Figuren auf dem Feld haben
   const BLOCK_PREFIX = 'BLOCK_'; // gespeicherter Wert ist 'BLOCK_A' oder 'BLOCK_B' je nachdem wer geblockt hat
 
   let size = 3;
   let cells = makeGrid(3); // 2D array, null | 'A' | 'B' | 'BLOCK_A' | 'BLOCK_B'
   let current = 'A';
+  let nextStarter = 'B'; // wer startet das naechste Match (wechselt jedes Mal)
   let totalMoves = 0;
   let grown = false;
   let blockPhase = null; // {picksLeft:n} — aktiv direkt nach dem Wachstum
@@ -639,7 +647,7 @@
 
         if (val === 'A') div.classList.add('piece-a');
         else if (val === 'B') div.classList.add('piece-b');
-        else if (isBlocked(val)) div.classList.add('blocked-cell', blockerOf(val) === 'A' ? 'blocked-a' : 'blocked-b');
+        else if (isBlocked(val)) div.classList.add('blocked-cell', blockerOf(val) === 'A' ? 'blocked-a' : blockerOf(val) === 'B' ? 'blocked-b' : 'blocked-wall');
         else div.classList.add('empty');
 
         if (winSet.has(r+','+c)) div.classList.add('win-flash');
@@ -667,7 +675,8 @@
         if (val === 'A') glyph.textContent = '✕';
         else if (val === 'B') glyph.textContent = '◯';
         else if (isBlocked(val)){
-          glyph.innerHTML = blockerOf(val) === 'A' ? FLAME_SVG : SNOWFLAKE_SVG;
+          const who = blockerOf(val);
+          glyph.innerHTML = who === 'A' ? FLAME_SVG : who === 'B' ? SNOWFLAKE_SVG : WALL_SVG;
         }
         div.appendChild(glyph);
 
@@ -887,6 +896,7 @@
   // CDN-Script abhängen (das in der Vorschau geblockt sein kann).
   const FLAME_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
   const SNOWFLAKE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M12 2v20"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></svg>';
+  const WALL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="9"/><line x1="15" y1="9" x2="15" y2="15"/><line x1="9" y1="15" x2="9" y2="21"/></svg>';
 
   function onCellClick(r,c){
     if (winner) return;
@@ -1026,6 +1036,40 @@
     return checkWinOnBoard(cells, size);
   }
 
+  // Findet eine offene Zweierreihe (zwei gleiche Figuren nebeneinander, beide
+  // Enden frei und im Feld) und gibt eines der beiden freien Enden zurück.
+  function findOpenTwo(boardCells, sz){
+    const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+    for (let r=0; r<sz; r++){
+      for (let c=0; c<sz; c++){
+        const val = boardCells[r][c];
+        if (val !== 'A' && val !== 'B') continue;
+        for (const [dr,dc] of dirs){
+          const r2=r+dr, c2=c+dc;
+          if (r2<0||r2>=sz||c2<0||c2>=sz) continue;
+          if (boardCells[r2][c2] !== val) continue;
+          const endA = { r: r-dr, c: c-dc };
+          const endB = { r: r2+dr, c: c2+dc };
+          const aOpen = endA.r>=0 && endA.r<sz && endA.c>=0 && endA.c<sz && !boardCells[endA.r][endA.c];
+          const bOpen = endB.r>=0 && endB.r<sz && endB.c>=0 && endB.c<sz && !boardCells[endB.r][endB.c];
+          if (aOpen && bOpen) return endA;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Direkt nach jedem echten Zug: entsteht dabei eine offene Zweierreihe, wird
+  // sofort automatisch eines der beiden Enden blockiert (neutrale Wand).
+  function applyAutoWall(){
+    const spot = findOpenTwo(cells, size);
+    if (spot){
+      cells[spot.r][spot.c] = BLOCK_PREFIX + 'WALL';
+      return true;
+    }
+    return false;
+  }
+
   function growBoard(){
     const oldSize = size;
     const ns = size + 2;
@@ -1038,6 +1082,16 @@
     size = ns;
     cells = ng;
     grown = true;
+  }
+
+  function countPieces(player){
+    let n = 0;
+    for (let r=0; r<size; r++){
+      for (let c=0; c<size; c++){
+        if (cells[r][c] === player) n++;
+      }
+    }
+    return n;
   }
 
   function finishMove(){
@@ -1054,12 +1108,20 @@
       return;
     }
 
+    let wallAppeared = applyAutoWall();
+
     let justGrew = false;
-    if (!grown && totalMoves >= GROWTH_AFTER_MOVES && size === 3){
+    if (!grown && size === 3 &&
+        countPieces('A') >= GROWTH_MIN_OWN_PIECES &&
+        countPieces('B') >= GROWTH_MIN_OWN_PIECES){
       growBoard();
       boardEl.classList.add('grown');
       setTimeout(() => boardEl.classList.remove('grown'), 650);
       justGrew = true;
+      // Wachstum selbst kann randständige Paare zu offenen Zweierreihen machen,
+      // also nach dem Wachstum erneut (wiederholt) prüfen.
+      let guard = 8;
+      while (applyAutoWall() && guard-- > 0){ wallAppeared = true; }
     }
 
     current = opponent(current);
@@ -1067,11 +1129,16 @@
 
     if (justGrew){
       blockPhase = { picksLeft: 2 };
-      updateStatus(`Feld gewachsen auf ${size}×${size}! ${playerLabel(current)} wählt ein Feld zum Blockieren.`);
+      const wallNote = wallAppeared ? ' Dabei sind automatische Wände entstanden.' : '';
+      updateStatus(`Feld gewachsen auf ${size}×${size}!${wallNote} ${playerLabel(current)} wählt ein Feld zum Blockieren.`);
     } else {
       mode = 'place';
       Object.entries(modeBtns).forEach(([k,btn]) => btn.classList.toggle('active', k==='place'));
-      updateStatus();
+      if (wallAppeared){
+        updateStatus(`Automatische Wand! Offene Zweierreihe erkannt und blockiert. ${playerLabel(current)} ist am Zug.`);
+      } else {
+        updateStatus();
+      }
     }
     render();
     maybeTriggerBot();
@@ -1080,7 +1147,8 @@
   function newMatch(){
     size = 3;
     cells = makeGrid(3);
-    current = 'A';
+    current = nextStarter;
+    nextStarter = opponent(nextStarter);
     totalMoves = 0;
     grown = false;
     blockPhase = null;
@@ -1092,10 +1160,12 @@
     hideWinModal();
     updateStatus();
     render();
+    maybeTriggerBot();
   }
 
   function resetAll(){
     wins = { A:0, B:0 };
+    nextStarter = 'B';
     newMatch();
   }
 
